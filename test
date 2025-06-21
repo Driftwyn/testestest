@@ -1,0 +1,190 @@
+local DriftwynUI = {}
+
+function DriftwynUI:CreateWindow()
+    local Players = game:GetService("Players")
+    local UIS = game:GetService("UserInputService")
+    local HttpService = game:GetService("HttpService")
+    local player = Players.LocalPlayer
+    local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+    gui.Name = "DriftwynUI"; gui.ResetOnSpawn = false
+    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    -- Core Frames
+    local MainFrame = Instance.new("Frame", gui)
+    MainFrame.Name = "MainFrame"; MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    MainFrame.Position, MainFrame.Size = UDim2.new(0.5,0,0.5,0), UDim2.new(0,618,0,350)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0,6)
+
+    for _, c in ipairs({"Top","Left","Bottom","Right"}) do
+        local f = Instance.new("Frame", MainFrame)
+        f.Name = c.."Frame"
+        f.BackgroundColor3 = Color3.fromRGB(255,0,0)
+        if c == "Top"     then f.Size = UDim2.new(1,5,0,6)
+        elseif c == "Bottom" then f.Position, f.Size = UDim2.new(0,0,1,-6), UDim2.new(1,5,0,6)
+        elseif c == "Left"   then f.Position, f.Size = UDim2.new(0,0,0,30), UDim2.new(0,8,1,-30)
+        elseif c == "Right"  then f.Position, f.Size = UDim2.new(1,-8,0,30), UDim2.new(0,8,1,-30)
+        end
+    end
+
+    local Title = Instance.new("TextLabel", MainFrame)
+    Title.Text, Title.Font = "Driftwyn Hub", Enum.Font.GothamBold
+    Title.TextSize, Title.TextColor3 = 16, Color3.new(1,1,1)
+    Title.BackgroundTransparency = 1
+    Title.Position, Title.Size = UDim2.new(0.012,0,0,0), UDim2.new(1,0,0,30)
+
+    local TabHolder = Instance.new("Frame", MainFrame)
+    TabHolder.Name="TabHolder"; TabHolder.BackgroundColor3 = Color3.fromRGB(45,45,45)
+    TabHolder.Position, TabHolder.Size = UDim2.new(0.012,0,0.105,0), UDim2.new(0,100,0.87,0)
+    Instance.new("UIListLayout", TabHolder).SortOrder = Enum.SortOrder.LayoutOrder
+
+    local ContentFrame = Instance.new("Frame", MainFrame)
+    ContentFrame.Name="ContentFrame"; ContentFrame.BackgroundColor3=Color3.fromRGB(30,30,30)
+    ContentFrame.Position, ContentFrame.Size = UDim2.new(0,108,0,36), UDim2.new(0.982,-100,0.965,-30)
+
+    -- Dragging & Visibility Toggle
+    do
+        local dragging=false; local dragStart; local startPos
+        local function beginDrag(input)
+            if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+                dragging=true; dragStart=input.Position; startPos=MainFrame.Position
+                input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
+            end
+        end
+        MainFrame.InputBegan:Connect(beginDrag)
+        UIS.InputChanged:Connect(function(i) 
+            if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+                local delta=i.Position - dragStart
+                MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+delta.X, startPos.Y.Scale, startPos.Y.Offset+delta.Y)
+            end
+        end)
+    end
+
+    -- Config storage
+    local config = {visible=true, keybind="RightControl", windowPos={0.5,0,0.5,0}}
+
+    -- Save/Load Implementation
+    local function save()
+        config.windowPos = {MainFrame.Position.X.Scale, MainFrame.Position.X.Offset, MainFrame.Position.Y.Scale, MainFrame.Position.Y.Offset}
+        writefile("DriftwynUIConfig.json", HttpService:JSONEncode(config))
+    end
+    local function load()
+        if isfile("DriftwynUIConfig.json") then
+            local data = HttpService:JSONDecode(readfile("DriftwynUIConfig.json"))
+            for k,v in pairs(data) do config[k] = v end
+            MainFrame.Position = UDim2.new(unpack(config.windowPos))
+            MainFrame.Visible = config.visible
+        end
+    end
+
+    -- Visibility keybind
+    UIS.InputBegan:Connect(function(i,gp)
+        if not gp and i.KeyCode.Name == config.keybind then
+            config.visible = not config.visible
+            MainFrame.Visible = config.visible
+            save()
+        end
+    end)
+
+    -- Tab system
+    local tabs={}
+    function DriftwynUI:CreateTab(name)
+        local tabBtn = Instance.new("TextButton", TabHolder)
+        tabBtn.Size,tabBtn.Font,tabBtn.Text,tabBtn.TextSize = UDim2.new(1,0,0,30), Enum.Font.GothamBold, name, 14
+        tabBtn.BackgroundColor3 = Color3.fromRGB(60,0,0); tabBtn.TextColor3 = Color3.new(1,1,1)
+
+        local page = Instance.new("Frame", ContentFrame)
+        page.BackgroundTransparency = 1; page.Visible = false
+        page.Size = UDim2.new(1,0,1,0)
+        Instance.new("UIListLayout", page).SortOrder = Enum.SortOrder.LayoutOrder
+
+        tabBtn.MouseButton1Click:Connect(function()
+            for _,t in ipairs(tabs) do t.page.Visible=false end
+            page.Visible=true
+        end)
+
+        local tab = {page=page}
+        table.insert(tabs, tab)
+        if #tabs==1 then page.Visible=true end
+
+        -- Add Elements
+        function tab:AddLabel(txt)
+            local lbl=Instance.new("TextLabel",page); lbl.Size=UDim2.new(1,-10,0,24)
+            lbl.BackgroundTransparency=1; lbl.Text=txt; lbl.TextColor3=Color3.new(1,1,1)
+            lbl.Font=Enum.Font.GothamBold; lbl.TextSize=14
+        end
+        function tab:AddParagraph(txt)
+            local p=Instance.new("TextLabel",page); p.Size=UDim2.new(1,-10,0,40)
+            p.BackgroundTransparency=1; p.TextWrapped=true; p.Text=txt
+            p.TextColor3=Color3.fromRGB(200,200,200); p.Font=Enum.Font.Gotham; p.TextSize=13
+        end
+        function tab:AddButton(cfg)
+            local b=Instance.new("TextButton",page); b.Size=UDim2.new(1,-10,0,30)
+            b.BackgroundColor3=Color3.fromRGB(90,0,0); b.Text=cfg.Name
+            b.TextColor3=Color3.new(1,1,1); b.Font=Enum.Font.GothamBold; b.TextSize=14
+            b.MouseButton1Click:Connect(cfg.Callback)
+        end
+        function tab:AddToggle(cfg)
+            local st=false; local b=Instance.new("TextButton",page)
+            b.Size, b.BackgroundColor3, b.Font, b.TextSize = UDim2.new(1,-10,0,30), Color3.fromRGB(70,0,0), Enum.Font.Gotham, 14
+            b.TextColor3=Color3.new(1,1,1); b.Text=cfg.Name..": OFF"
+            b.MouseButton1Click:Connect(function()
+                st = not st
+                b.Text=cfg.Name..": "..(st and "ON" or "OFF")
+                if cfg.Callback then cfg.Callback(st) end
+            end)
+        end
+        function tab:AddTextbox(cfg)
+            local tb=Instance.new("TextBox",page); tb.Size=UDim2.new(1,-10,0,30)
+            tb.BackgroundColor3=Color3.fromRGB(50,50,50); tb.TextColor3=Color3.new(1,1,1)
+            tb.Font=Enum.Font.Gotham; tb.TextSize=14
+            tb.Text = cfg.Placeholder or ""
+            tb.ClearTextOnFocus=true
+            tb.FocusLost:Connect(function(ep) if cfg.Callback then cfg.Callback(tb.Text) end end)
+        end
+        function tab:AddSlider(cfg)
+            local hold=Instance.new("Frame",page); hold.Size, hold.BackgroundTransparency = UDim2.new(1,-10,0,40),1
+            local lbl=Instance.new("TextLabel",hold); lbl.Size, lbl.BackgroundTransparency = UDim2.new(1,0,0,20),1
+            lbl.TextColor3, lbl.Font, lbl.TextSize = Color3.new(1,1,1), Enum.Font.Gotham, 13
+            local slid=Instance.new("TextButton",hold); slid.Position, slid.Size = UDim2.new(0,0,0,20), UDim2.new(1,0,0,20)
+            slid.BackgroundColor3=Color3.fromRGB(100,0,0); slid.Text=""
+            local fill=Instance.new("Frame",slid); fill.Size, fill.BackgroundColor3 = UDim2.new(0,0,1,0), Color3.new(1,1,1)
+            local function upd(v)
+                fill.Size = UDim2.new((v-cfg.Min)/(cfg.Max-cfg.Min),0,1,0)
+                lbl.Text = cfg.Name..": "..v
+                if cfg.Callback then cfg.Callback(v) end
+            end
+            slid.MouseButton1Down:Connect(function()
+                local conn = UIS.InputChanged:Connect(function(i)
+                    if i.UserInputType==Enum.UserInputType.MouseMovement then
+                        local x=(i.Position.X-slid.AbsolutePosition.X)/slid.AbsoluteSize.X
+                        upd(math.floor(cfg.Min + math.clamp(x,0,1)*(cfg.Max-cfg.Min)))
+                    end
+                end)
+                UIS.InputEnded:Connect(function() conn:Disconnect() end)
+            end)
+            upd(cfg.Default)
+        end
+        function tab:AddMultiDropdown(cfg)
+            local b=Instance.new("TextButton",page)
+            b.Size, b.BackgroundColor3, b.Font, b.TextSize = UDim2.new(1,-10,0,30), Color3.fromRGB(90,0,90),
+                                                                Enum.Font.Gotham, 13
+            local sel={}
+            b.Text = cfg.Name..": None"
+            b.MouseButton1Click:Connect(function()
+                for _,v in ipairs(cfg.Options) do
+                    if not table.find(sel,v) then table.insert(sel,v) else table.remove(sel,table.find(sel,v)) end
+                end
+                b.Text=#sel>0 and cfg.Name..": "..table.concat(sel,", ") or cfg.Name..": None"
+                if cfg.Callback then cfg.Callback(sel) end
+            end)
+        end
+
+        return tab
+    end
+
+    load()
+    return DriftwynUI
+end
+
+return DriftwynUI
